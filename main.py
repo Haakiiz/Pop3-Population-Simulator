@@ -1,5 +1,7 @@
 import simpy
 import random
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 # To do liste:
@@ -83,11 +85,18 @@ hut_multiplier = {
         5:3,
     }
 
+# Calibration constant derived from measured in-game data:
+# T = base_sprog_time * pop_band_factor / (hut_multiplier[braves] * CALIBRATION)
+# Reference point: lvl1, 1 brave, pop<9 → 97s  =>  CALIBRATION = 4000 * 2.747 / 97
+CALIBRATION = base_sprog_time[1] * population_band_factors["00_04"] / 97  # ≈ 113.28
+
 def find_breething_duration(base_sprog_time, braves_antall):
+    if braves_antall == 0:
+        return float('inf')
     population_band = get_population_band_factor(Brave, population_band_factors)
-    breething_duration = (base_sprog_time / (hut_multiplier * braves_antall * population_band))
-    #breething_duration = (base_sprog_time / 12) / (0.5 + population_band * braves_antall)
-    return breething_duration
+    mult = hut_multiplier[min(braves_antall, 5)]
+    breething_duration = (base_sprog_time * population_band) / (mult * CALIBRATION)
+    return max(1.0, breething_duration)
 
 class Tribe(object):
 
@@ -125,7 +134,11 @@ class Hut(object):
 
     def breething_process(self): #denne føder en brave
         while True:
-            self.sprog_rate = find_breething_duration(base_sprog_time[self.level], len(self.braves))
+            if not self.braves:
+                yield self.env.timeout(10)
+                continue
+            capped_level = min(self.level, max(base_sprog_time.keys()))
+            self.sprog_rate = find_breething_duration(base_sprog_time[capped_level], len(self.braves))
             #print(f'Sprog rate er {self.sprog_rate}: \n hutlvl: {self.level} \n beboere: {len(self.braves)} \n totalPOP: {graph_population[-1]}  ')
             yield self.env.timeout(self.sprog_rate)
             brave = Brave(env)
@@ -157,12 +170,11 @@ class Hut(object):
             yield self.env.process(self.split())
 
     def split(self):
-        #yield env.timeout(random.randint(15, 40)) #bare tester
         yield env.timeout(random.randint(1,15))
-        new_hut = Hut(env, self.braves[2:])
-        self.braves[0].hut = new_hut
-        self.braves[1].hut = new_hut
-        new_hut.braves = self.braves[2:]
+        moving = list(self.braves[2:])
+        new_hut = Hut(env, moving)
+        for b in moving:
+            b.hut = new_hut
         self.braves = self.braves[:2]
         # print(f'Hut full! New hut created.')
 
@@ -205,22 +217,22 @@ if __name__ == "__main__":
     for x in range(6):
         Braveru = Brave(env)
 
-    while True:
-        env.run(until=300)
-
-        # Call function to print empty huts
+    for checkpoint in [300, 500, 800, 1200]:
+        env.run(until=checkpoint)
+        print(f'\n--- t={checkpoint} ---')
+        print(f'Population: {Brave.number_of_braves}')
+        print(f'Huts:       {Hut.number_of_huts}')
         print_homeless_braves()
 
-        print(f'number of huts: {Hut.number_of_huts}')
-        print(f'number of braves:  {Brave.number_of_braves}')
-        print(graph_population)
-        print(graph_time)
+    print(f'\nFinal population data (every 10 ticks):')
+    print(graph_population)
 
-        plt.plot(graph_time, graph_population)
-        plt.xlabel('Time')
-        plt.ylabel('Population')
-        plt.title('Population over Time')
-        plt.show()
+    plt.plot(graph_time, graph_population)
+    plt.xlabel('Time (ticks)')
+    plt.ylabel('Population')
+    plt.title('Populous 3 — Tribe Population over Time')
+    plt.savefig('population_graph.png')
+    print('\nGraph saved to population_graph.png')
 
 
 
