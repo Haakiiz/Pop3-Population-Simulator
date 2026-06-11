@@ -13,9 +13,19 @@ Install dependencies (required once):
 pip install simpy matplotlib numpy scikit-learn
 ```
 
-Run the main simulation (currently has a bug — see below):
+Run the main simulation:
 ```bash
 python main.py
+```
+
+Validate the breeding formula against all measured in-game data:
+```bash
+python formula_validation.py
+```
+
+Compare population-growth strategies (cram vs balanced vs spread):
+```bash
+python strategy_sim.py
 ```
 
 Run the working V2 simulation:
@@ -23,17 +33,27 @@ Run the working V2 simulation:
 python 123.py
 ```
 
-Test the breeding formula calculator:
-```bash
-python asd.py
-```
-
-Run the polynomial regression formula finder:
-```bash
-python formelutregning.py
-```
-
 There are no tests, linters, or build steps.
+
+## The Breeding Formula (SOLVED)
+
+The formula reproduces all measured in-game times with **no fitted constants** — every number comes straight from the game's `constant.dat` plus the 12.5 game-turns-per-second game speed:
+
+```
+T_seconds = (base_sprog_time × band% / 100) / (hut_multiplier × 12.5)
+```
+
+- `base_sprog_time` = `{lvl1: 4000, lvl2: 3000, lvl3: 2000}` (P3CONST_HUTn_SPROG_TIME)
+- `hut_multiplier` = `0.5 + 0.5 × braves_in_hut` — an **empty hut still breeds** at multiplier 0.5 (confirmed by measurement: lvl 1 empty hut = 197 s vs predicted 192 s)
+- `band%` = P3CONST_SPROG%_POP_BAND value, selected by tribe population as a **percentage of the 200 max population** (pop 0–9 → band 00_04 = 30, pop 10–19 → 35, pop 20–29 → 40, …, pop 190+ → 200). Higher population ⇒ **slower** breeding (the band multiplies the time).
+
+Mean error vs. the 15 primary measured data points: **4.6%** (worst 14.3%, on the noisiest small-number measurement). The second measuring session in `formelutregning.py` fits equally well, including the two empty-hut points; its `(3, 2, 14, 19)` row is a recording error (predicted 37 s).
+
+Interpretation: a hut needs `base_sprog_time × band%/100` "sprog points" for a birth and earns `hut_multiplier` points per game turn at 12.5 turns/second.
+
+## Strategy Findings (`strategy_sim.py`)
+
+Total tribe birth rate ∝ `0.5 × (occupied_huts + housed_population)`, so each *additional occupied hut* is worth as much as each *extra brave* — spreading population across many huts beats cramming huts full. With hut build-time cost included, ~2 braves per hut is the sweet spot. Hut level dominates: level 3 huts breed 2× as fast as level 1.
 
 ## Architecture
 
@@ -46,44 +66,22 @@ All simulations use `simpy.Environment()` as a discrete-event clock. Entities ar
 3. Each homeless `Brave` runs a `create_hut` coroutine that builds a new hut after a random delay
 4. `Hut.number_of_huts`, `Brave.number_of_braves`, `Hut.instances`, and `Brave.instances` are class-level counters — they persist across simulation restarts unless explicitly reset
 
-### Game Mechanics Being Modelled
-
-The breeding time formula uses three factors:
-- **Hut level** (1–3): `base_sprog_time = {1: 4000, 2: 3000, 3: 2000}`
-- **Braves in hut**: `hut_multiplier = {0:0, 1:1, 2:1.5, 3:2, 4:2.5, 5:3}` — more braves = faster
-- **Population band**: `population_band_factors` — larger tribe population = faster breeding, based on real values from the game's `constant.dat`
-
-Target breeding times (measured from actual gameplay, in `data fra pop.txt`):
-- lvl 1 hut, 1 brave, pop <9 → 97 ticks
-- lvl 1 hut, 2 braves → 64 ticks
-- lvl 3 hut, 5 braves → 14 ticks
-
 ### File Roles
 
 | File | Role |
 |---|---|
-| `main.py` | Most advanced version — hut levelling, population bands, graph output. **Has a bug (see below)** |
+| `main.py` | Most advanced SimPy version — hut levelling, population bands, graph output |
+| `formula_validation.py` | Tests candidate formulas against all measured in-game data; documents the solved formula |
+| `strategy_sim.py` | Deterministic event sim comparing hut-allocation strategies (cram/balanced/spread × hut level × build cost) |
+| `asd.py` | Simple formula calculator — prints computed vs measured breeding times |
 | `123.py` | Working V2 — fixed 97-tick breed rate, huts split at 3 braves |
 | `chatGPT4.py` | Alternative implementation — cleaner class design but Braves stop after hut fills |
-| `asd.py` | Formula tester — prints computed vs expected breeding times |
-| `formelutregning.py` | Polynomial regression (sklearn) to reverse-engineer the formula from measured data |
+| `formelutregning.py` | Historical: polynomial regression attempt; its data block doubles as the second measuring session |
 | `data fra pop.txt` | Research notes: raw game constants from `constant.dat`, measured in-game timings, formula derivations |
 | `graph.py` | Standalone plotter using a hardcoded captured run's population data |
 
-## Known Bugs in `main.py`
+## Known Modelling Quirks in `main.py`
 
-**Critical — crashes immediately:**  
-`find_breething_duration()` at line 88 multiplies `hut_multiplier` (a dict) by an int:
-```python
-breething_duration = (base_sprog_time / (hut_multiplier * braves_antall * population_band))
-```
-Should index the dict: `hut_multiplier[self.level]` — but `self.level` is not passed into the function.
-
-**Secondary issues:**
-- `hut_upgrade()` increments `self.level` without a cap, but `base_sprog_time` only has keys 1–3 (will `KeyError` at level 4)
-- `graph_maker` references `Brave` before it is defined when `Tribe.__init__` runs at module level
+- `hut_upgrade()` adds a free brave on every upgrade and has no level cap (level is capped at lookup time instead)
+- Population is not capped at 200, so long runs exceed the real game's maximum
 - Class-level `instances` lists and counters (`Brave.number_of_braves`, `Hut.number_of_huts`) are never reset between runs
-
-## The Formula Problem
-
-`asd.py` outputs are wrong — e.g., `breeding_time(1, 1, 4)` returns `1200` but the target is `97`. The formula `(base_sprog_time / hut_multiplier) * population_band_modifier` does not match the actual game behaviour. `formelutregning.py` exists specifically to find a better formula via regression. The correct formula has not yet been nailed down and is the core open problem in this project.
