@@ -17,67 +17,48 @@ import matplotlib.pyplot as plt
 
 env = simpy.Environment()
 
-exponent = 0.8
 base_sprog_time = {1: 4000, 2: 3000, 3: 2000}
+# Raw P3CONST_SPROG%_POP_BAND values from constant.dat. The band is the
+# tribe's population as a percentage of the 200 max (pop 0-9 -> 00_04, etc.)
 population_band_factors = {
-    "00_04": 2.747, #0-8 population
-    "05_09": 3.219, #9-18 population
-    "10_14": 3.662, #10-28 population
-    "15_19": 4.578, #29-38 population
-    "20_24": 5.494, #39-48 population
-    "25_29": 6.410, #...etc
-    "30_34": 7.326,
-    "35_39": 8.242,
-    "40_44": 9.158,
-    "45_49": 10.074,
-    "50_54": 10.990,
-    "55_59": 11.906,
-    "60_64": 12.822,
-    "65_69": 13.738,
-    "70_74": 14.654,
-    "75_79": 15.570,
-    "80_84": 16.486,
-    "85_89": 17.402,
-    "90_94": 17.925,
-    "95_99": 18.448,
+    "00_04": 30,  # population 0-9
+    "05_09": 35,  # population 10-19
+    "10_14": 40,  # population 20-29
+    "15_19": 50,  # ...etc
+    "20_24": 60,
+    "25_29": 70,
+    "30_34": 80,
+    "35_39": 90,
+    "40_44": 100,
+    "45_49": 110,
+    "50_54": 120,
+    "55_59": 130,
+    "60_64": 140,
+    "65_69": 150,
+    "70_74": 160,
+    "75_79": 170,
+    "80_84": 180,
+    "85_89": 190,
+    "90_94": 195,
+    "95_99": 200,
 }
 
 graph_population = [6]
 graph_time = [0]
 graph_huts = [0]
 
+MAX_POPULATION = 200
+
 def get_population_band_factor(Brave, population_band_factors):
     population = Brave.number_of_braves
-    bands = [
-        (9, "00_04"),
-        (18, "05_09"),
-        (28, "10_14"),
-        (38, "15_19"),
-        (48, "20_24"),
-        (58, "25_29"),
-        (68, "30_34"),
-        (78, "35_39"),
-        (88, "40_44"),
-        (98, "45_49"),
-        (108, "50_54"),
-        (118, "55_59"),
-        (128, "60_64"),
-        (138, "65_69"),
-        (148, "70_74"),
-        (158, "75_79"),
-        (168, "80_84"),
-        (178, "85_89"),
-        (188, "90_94"),
-        (198, "95_99"),
-    ]
-    for band_start, band_key in bands:
-        if population <= band_start:
-            return population_band_factors[band_key]
-    return population_band_factors[bands[-1][1]]
+    band_index = min(int(population / MAX_POPULATION * 100) // 5, 19)
+    return list(population_band_factors.values())[band_index]
 
 #gets multiplier from this code in the constant.dat "# X 0 - 0.5, 1 - 1.0, 2 - 1.5, 3 - 2.0 ...."
+#even an empty hut breeds, at half the rate of a 1-brave hut (confirmed by
+#measured times: lvl1/0 braves = 197s, lvl3/0 braves/pop14 = 120s)
 hut_multiplier = {
-        0:0,
+        0:0.5,
         1:1,
         2:1.5,
         3:2,
@@ -85,17 +66,18 @@ hut_multiplier = {
         5:3,
     }
 
-# Calibration constant derived from measured in-game data:
-# T = base_sprog_time * pop_band_factor / (hut_multiplier[braves] * CALIBRATION)
-# Reference point: lvl1, 1 brave, pop<9 → 97s  =>  CALIBRATION = 4000 * 2.747 / 97
-CALIBRATION = base_sprog_time[1] * population_band_factors["00_04"] / 97  # ≈ 113.28
+# The game advances its breeding logic at 12.5 game turns per second.
+# A hut needs base_sprog_time * band% / 100 "sprog points" for a birth and
+# earns hut_multiplier points per game turn, so the breeding time is:
+#   T_seconds = (base_sprog_time * band% / 100) / (hut_multiplier * 12.5)
+# Validated against measured in-game times in formula_validation.py
+# (mean error < 5%, no fitted constants).
+TICKRATE = 12.5
 
 def find_breething_duration(base_sprog_time, braves_antall):
-    if braves_antall == 0:
-        return float('inf')
     population_band = get_population_band_factor(Brave, population_band_factors)
     mult = hut_multiplier[min(braves_antall, 5)]
-    breething_duration = (base_sprog_time * population_band) / (mult * CALIBRATION)
+    breething_duration = (base_sprog_time * population_band / 100) / (mult * TICKRATE)
     return max(1.0, breething_duration)
 
 class Tribe(object):
@@ -134,9 +116,6 @@ class Hut(object):
 
     def breething_process(self): #denne føder en brave
         while True:
-            if not self.braves:
-                yield self.env.timeout(10)
-                continue
             capped_level = min(self.level, max(base_sprog_time.keys()))
             self.sprog_rate = find_breething_duration(base_sprog_time[capped_level], len(self.braves))
             #print(f'Sprog rate er {self.sprog_rate}: \n hutlvl: {self.level} \n beboere: {len(self.braves)} \n totalPOP: {graph_population[-1]}  ')
