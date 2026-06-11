@@ -38,9 +38,7 @@ def band_pct(population):
 
 
 def breed_time(level, braves, population):
-    if braves == 0:
-        return None
-    mult = 0.5 + 0.5 * braves
+    mult = 0.5 + 0.5 * braves        # empty huts breed too, at 0.5
     return (BASE[level] * band_pct(population) / 100) / (mult * TICKRATE)
 
 
@@ -62,6 +60,7 @@ class Sim:
         self.events = []          # (time, seq, kind, hut_index)
         self.seq = 0
         self.milestones = {}
+        self.history = [(0.0, start_braves)]   # (time, pop) at every birth
         for _ in range(start_braves):
             self.place_new_brave()
 
@@ -103,6 +102,7 @@ class Sim:
                 continue
             self.place_new_brave()
             self.schedule_breed(hut)          # parent hut breeds again
+            self.history.append((self.now, self.pop))
             while check and self.pop >= check[0]:
                 self.milestones[check.pop(0)] = self.now
         return self
