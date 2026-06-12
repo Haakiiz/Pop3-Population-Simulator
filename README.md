@@ -15,9 +15,11 @@ T = (Base Sprog Time × Band% / 100) / (Hut Multiplier × 12.5)
 | **Base Sprog Time** | 4000 / 3000 / 2000 for hut level 1 / 2 / 3 (`P3CONST_HUTn_SPROG_TIME`) |
 | **Hut Multiplier** | `0.5 + 0.5 × occupants` — an **empty hut still breeds**, at half the rate of one occupant |
 | **Band%** | `P3CONST_SPROG%_POP_BAND` value, selected by tribe population as a % of the 200 max (pop 0–9 → 30, 10–19 → 35, 20–29 → 40, … 190+ → 200). Bigger tribe ⇒ slower breeding |
-| **12.5** | game turns per second (the only number not read directly from `constant.dat` — inferred from the timings) |
+| **12.5** | game turns per second (the only number not read directly from `constant.dat` — inferred from the timings; **see PS below**) |
 
 Intuition: a hut needs `Base Sprog Time × Band%/100` "breeding points" for a birth and earns `Hut Multiplier` points per game turn.
+
+> **PS — community correction on the tick rate:** Thanks to **IncaWarrior** on the Populous Reincarnated forum for pointing out that **the game operates at 12 ticks per second**, not 12.5 as inferred here. The best fit to the stopwatch measurements was ~12.4 (e.g. level 1 hut, 1 occupant: 97 s measured vs 100 s predicted at 12 t/s and 96 s at 12.5 t/s), so both values sit within measurement error and the code in this repo still uses 12.5. Substitute 12 if you want the engine-accurate value — all predictions simply shift by ~4%.
 
 Mean error against the measured in-game times is **under 5%**, with several exact hits, and **no fitted constants**:
 
@@ -64,4 +66,4 @@ python main.py                 # SimPy tribe-growth simulation
 | `data fra pop.txt` | Research notes: raw constants and stopwatch measurements (Norwegian) |
 | `archive/` | Historical experiments kept for context |
 
-Made by a long-time fan with help from the Populous Reincarnated Discord community. Corrections welcome — especially independent verification of the 12.5 turns/second game speed.
+Made by a long-time fan with help from the Populous Reincarnated Discord community. Corrections welcome — and thanks to **IncaWarrior** for the tick-rate correction (see PS above).
