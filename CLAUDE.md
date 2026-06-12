@@ -30,7 +30,7 @@ python strategy_sim.py
 
 Run the working V2 simulation:
 ```bash
-python 123.py
+python archive/123.py
 ```
 
 There are no tests, linters, or build steps.
@@ -73,12 +73,13 @@ All simulations use `simpy.Environment()` as a discrete-event clock. Entities ar
 | `main.py` | Most advanced SimPy version — hut levelling, population bands, graph output |
 | `formula_validation.py` | Tests candidate formulas against all measured in-game data; documents the solved formula |
 | `strategy_sim.py` | Deterministic event sim comparing hut-allocation strategies (cram/balanced/spread × hut level × build cost) |
+| `wiki_graphs.py` | Generates the four wiki/forum explanation graphs |
 | `asd.py` | Simple formula calculator — prints computed vs measured breeding times |
-| `123.py` | Working V2 — fixed 97-tick breed rate, huts split at 3 braves |
-| `chatGPT4.py` | Alternative implementation — cleaner class design but Braves stop after hut fills |
-| `formelutregning.py` | Historical: polynomial regression attempt; its data block doubles as the second measuring session |
+| `archive/123.py` | Working V2 — fixed 97-tick breed rate, huts split at 3 braves |
+| `archive/chatGPT4.py` | Alternative implementation — cleaner class design but Braves stop after hut fills |
+| `archive/formelutregning.py` | Historical: polynomial regression attempt; its data block doubles as the second measuring session |
 | `data fra pop.txt` | Research notes: raw game constants from `constant.dat`, measured in-game timings, formula derivations |
-| `graph.py` | Standalone plotter using a hardcoded captured run's population data |
+| `archive/graph.py` | Standalone plotter using a hardcoded captured run's population data |
 
 ## Known Modelling Quirks in `main.py`
 
